@@ -126,7 +126,7 @@ class Square
   end
 
   def to_s
-    @mark ? @mark : " "
+    !!@mark ? @mark : " "
   end
 end
 
@@ -138,9 +138,8 @@ class Board
     @grid_size = n
     @squares = make_squares(@grid_size)
     @unmarked = find_unmarked
-    @horizontals = find_horizontals # returns horizontal rows as nested array
-                                    # of indexes
-                                    # [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
+    # returns lines as nested array of indexes
+    @horizontals = find_horizontals # [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
     @diagonals = find_diagonals     # [[0, 4, 8], [2, 4, 6]]
     @verticals = find_verticals     # [[0, 3, 6], [1, 4, 7], [2, 5, 8]]
   end
@@ -195,35 +194,24 @@ class Board
   end
 
   def make_reference_lines
-    reference_lines = [] # array of strings of reference lines
-    big_board = size > 3
-    space = big_board ? "  " : " "
-    idx = 0
-    size.times do
-      squares = []
-      size.times do
-        number = big_board ? format("%2d", (idx + 1)) : (idx + 1)
+    space = big_board? ? "  " : " "
+    @horizontals.map do |row|
+      row.map do |idx|
+        number = big_board? ? format("%2d", (idx + 1)) : (idx + 1)
         marker = @squares[idx].mark ? space : number
-        squares << " #{marker} "
-        idx += 1
-      end
-      reference_lines << squares.join("|")
-    end
-    reference_lines
+        " #{marker} "
+      end.join("|")
+    end # return an array of str of rows with numbers
+  end
+
+  def big_board?
+    size > 3
   end
 
   def make_active_lines
-    active_lines = [] # array of strings of active lines
-    idx = 0
-    size.times do
-      spaces = []
-      size.times do
-        spaces << " #{@squares[idx]} "
-        idx += 1
-      end
-      active_lines << spaces.join("|")
+    @horizontals.map do |row|
+      row.map { |idx| " #{@squares[idx]} " }.join("|")
     end
-    active_lines
   end
 
   def make_divider_line(numbered=false)
@@ -312,7 +300,6 @@ end
 
 ### ENGINE CLASS
 class TTTGame
-  # BANNER_SIZE = 70
   MARKERS = ['x', 'o']
   MAX_POINTS = 5
   MIN_BOARD_SIZE = 3
@@ -334,16 +321,8 @@ class TTTGame
     display_welcome_message
     set_game_parameters
     loop do # New Game Loop
-      loop do # Turn-taking loop
-        board.display(heading)
-        @current_player.choose_square(board)
-        board.display(heading)
-        break if board.full? || winner_exists?
-        @current_player = next_player
-      end # End Turn
-      display_outcome
-      increment_points
-      @round += 1
+      player_turn # loop
+      end_round
       break if game_over? || quit?
       reset
     end
@@ -351,6 +330,22 @@ class TTTGame
   end
 
   private
+
+  def player_turn
+    loop do
+      board.display(heading)
+      @current_player.choose_square(board)
+      board.display(heading)
+      break if board.full? || winner_exists?
+      @current_player = next_player
+    end
+  end
+
+  def end_round
+    display_outcome
+    increment_points
+    @round += 1
+  end
 
   def heading
     Banner.new(["Round #{@round}",
@@ -427,23 +422,27 @@ class TTTGame
       other_marker = MARKERS.reject { |m| m == taken_marker }.first
       player.marker = other_marker
     else
-      puts "Would you like to play as #{MARKERS.first} or #{MARKERS.last}?"
-      marker = gets.chomp
-      loop do
-        break if MARKERS.include?(marker)
-        puts "Sorry, please choose a valid marker."
-        marker = gets.chomp
-      end
-      player.marker = marker
+      player.marker = ask_for_marker
     end
+  end
+
+  def ask_for_marker
+    puts "Would you like to play as #{MARKERS.first} or #{MARKERS.last}?"
+    marker = gets.chomp
+    loop do
+      break if MARKERS.include?(marker)
+      puts "Sorry, please choose a valid marker."
+      marker = gets.chomp
+    end
+    marker
   end
 
   def ask_board_size
     system('clear')
-    puts "What size board would you like to play with?"
+    puts "What size board would you like to play with? " \
+         "(Enter a number between #{MIN_BOARD_SIZE} and #{MAX_BOARD_SIZE})"
     size = gets.chomp.to_i
-    loop do
-      break if BOARD_RANGE.include?(size)
+    until BOARD_RANGE.include?(size)
       puts "Sorry please enter a value between #{MIN_BOARD_SIZE} and " \
            "#{MAX_BOARD_SIZE}."
       size = gets.chomp.to_i
@@ -461,25 +460,20 @@ class TTTGame
   end
 
   def display_outcome
-    if winner_exists?
-      outcome = "#{@winner.name.upcase} WINS!"
-    else
-      outcome = "BOARD FULL. IT'S A TIE."
-    end
+    winner = @winner ? @winner.name.upcase : "NO ONE"
+    outcome_messages = ["#{winner} WINS!",
+                        "BOARD FULL. IT'S A TIE."]
+    outcome = winner_exists? ? outcome_messages.first : outcome_messages.last
     puts Banner.new(outcome, BANNER_SIZE)
   end
 
   def display_goodbye_message
-    message = ''
-    if game_over?
-      message = "#{@champion.name.upcase} WINS THE GAME."
-    else
-      message = "Sorry to see you go so soon!"
-    end
+    champ = @champion ? @champion.name.upcase : "NO ONE"
+    message_opt = ["#{champ} WINS THE GAME.", "Sorry to see you go so soon!"]
+    message = game_over? ? message_opt.first : message_opt.last
     player1_score = format("%3d", player1.points)
     player2_score = format("%3d", player2.points)
-    puts Banner.new(['~ * GAME OVER * ~',
-                     'SCORES',
+    puts Banner.new(['~ * GAME OVER * ~', 'SCORES',
                      "#{player1.name}#{player1_score}",
                      "#{player2.name}#{player2_score}",
                      message,
@@ -500,11 +494,7 @@ end # End TTTGame Class
 
 class Banner
   def initialize(message, size=nil)
-    if message.is_a?(Array)
-      @message = message
-    else
-      @message = [message]
-    end
+    @message = message.is_a?(Array) ? message : [message]
     @size = size.nil? ? message.map(&:size).max : size
   end
 
