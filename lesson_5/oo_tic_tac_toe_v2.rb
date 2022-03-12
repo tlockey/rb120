@@ -236,8 +236,6 @@ class Board
   end
 
   def find_unmarked
-    # return an array of integers that represent which squares still have a
-    # status of nil (index + 1)
     unmarked_squares = []
     @squares.each_with_index do |square, idx|
       unmarked_squares << (idx + 1) unless square.mark
@@ -508,8 +506,6 @@ class Banner
       @message = [message]
     end
     @size = size.nil? ? message.map(&:size).max : size
-    size_error('small') if size < @message.size
-    size_error('big') if size > 80
   end
 
   def to_s
@@ -522,23 +518,6 @@ class Banner
 
   DASH = '-'
   SPACE = ' '
-
-  def size_error(state) # TOO MANY LINES ERROR
-    case state
-    when 'small'
-      loop do
-        puts "Size too small. Enter a size larger than #{@message.size}."
-        @size = gets.chomp.to_i
-        break if @size >= @message.size
-      end
-    when 'big'
-      loop do
-        puts "Size too big. Enter a size smaller than 80."
-        @size = gets.chomp.to_i
-        break if @size <= 80
-      end
-    end
-  end
 
   def horizontal_rule
     "+-#{DASH * @size}-+"
