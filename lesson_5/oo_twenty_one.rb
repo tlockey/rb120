@@ -4,10 +4,10 @@ There is a deck of cards composed of 52 cards.
 There are 4 suits (hearts, diamonds, clubs and spades),
 And 13 values, (2, 3, 4, 5 ,6, 7, 8, 9, 10, jack, queen, king, ace)
 
-The goal is to get as close to 21 as possible withhout going over. 
+The goal is to get as close to 21 as possible withhout going over.
 Going over 21 is a bust and you lose.
 
-Both participants are dealt 2 cards. 
+Both participants are dealt 2 cards.
 The player can see 2 cards, but only one of the dealer's cards.
 
 Ace's value is determined every time a new card is drawn from the deck
@@ -64,14 +64,56 @@ IMPROVEMENTS:
 [ ] General Refactoring
 [ ] General UX Improvements
     [ ] Display both player's cards at the end ?
-    [ ] Improve Display Player Cards to have and, 
+    [ ] Improve Display Player Cards to have and,
 [ ] Create a Proper Map
     [ ] Test Individual Parts
 
 =end
 require 'pry'
+module Displayable
+  BANNER_SIZE = 80
+
+  def display(message)
+    puts Banner.new(message, BANNER_SIZE)
+  end
+
+  class Banner
+    def initialize(message, size=nil)
+      @message = message.is_a?(Array) ? message : [message]
+      @size = size.nil? ? message.map(&:size).max : size
+    end
+
+    def to_s
+      ([horizontal_rule, empty_line] +
+        message_line +
+        [empty_line, horizontal_rule]).join("\n")
+    end
+
+    private
+
+    DASH = '-'
+    SPACE = ' '
+
+    def horizontal_rule
+      "+-#{DASH * @size}-+"
+    end
+
+    def empty_line
+      "| #{SPACE * @size} |"
+    end
+
+    def message_line # return an array of lines
+      @message.map do |line|
+        "| #{line.center(@size)} |"
+      end
+    end
+  end
+end
+
 class Participant
-  attr_accessor :hand, :stayed
+  include Displayable
+  attr_accessor :hand, :stayed, :name
+
   def initialize
     @hand = []
     @stayed = false
@@ -83,11 +125,14 @@ class Participant
 
   def total
     total = 0
-    @hand.each do |card| 
+    @hand.each do |card|
       total = card + total
     end
 
-    # adjust for aces
+    total = adjust_for_aces(total)
+  end
+
+  def adjust_for_aces(total)
     if has_ace? && total > 21
       aces = count_ace
       until total <= 21 || aces == 0
@@ -96,6 +141,15 @@ class Participant
       end
     end
     total
+  end
+
+  def display_hand
+    list = ["---#{name}'s hand---"]
+    @hand.each do |card|
+      list << "=> #{card}"
+    end
+    list << "Total => #{total}."
+    display(list)
   end
 
   private
@@ -114,21 +168,41 @@ class Participant
     end
     aces
   end
+
+  def to_s
+    name
+  end
 end
 
 class Dealer < Participant
+  NAMES = %w(Holly Joe Spencer Tracey John)
+
   def initialize
     super()
+    @name = NAMES.sample
   end
 
   def hit_or_stay
     total >= 17 ? "stay" : "hit"
   end
 
-  def display_hand
-    puts "Dealer has #{hand.first} and #{hand.size - 1} other card(s)."
+  def display_hand(hidden=true)
+    if hidden
+      display_first_card
+    else
+      super()
+    end
   end
-  
+
+  def display_first_card
+    list = ["---#{name}'s hand---"]
+    list << "=> #{hand.first}"
+    (hand.size - 1).times do
+      list << "=> ??? "
+    end
+    display(list)
+  end
+
   def to_s
     "Dealer"
   end
@@ -137,6 +211,18 @@ end
 class Player < Participant
   def initialize
     super()
+    @name = ask_name
+  end
+
+  def ask_name
+    puts "What's your name?"
+    name = gets.chomp
+    loop do
+      break unless name == ""
+      puts "Please enter a name."
+      name = gets.chomp
+    end
+    name
   end
 
   def hit_or_stay
@@ -148,45 +234,22 @@ class Player < Participant
       choice = gets.chomp.downcase
     end
     choice
-    # ask to hit or stay
-    # return a string
-  end
-
-  def display_hand
-    s_hand = @hand.map{ |card| card.to_s}.join(", ")
-    puts "You have #{s_hand}."
-    puts ""
-    puts "Your total is #{total}."
-    # You have __, ___, ___
-    # For a total of ___
-  end
-
-  def to_s
-    "Player"
   end
 end
 
 class Deck
-  SUITS = ['Hearts', 'Spades', 'Clubs', 'Diamonds']
-  CARD_TYPE = ['Ace', 'Two', 'Three', 'Four', 'Five', 'Six',
-               'Seven', 'Eight', 'Nine', 'Ten', 'Jack', 'Queen', 'King']
   def initialize
     @cards = []
-    get_cards
+    make_deck
   end
 
   def deal(participant)
-    dealt_card = @cards.sample
-    participant.hand << dealt_card
-    @cards = @cards.reject{ |card| card == dealt_card}
-    #removes a card from the deck and places it in hand of participant
+    participant.hand << @cards.pop
   end
 
   def to_s
-    list = @cards.map do |card|
-            card.to_s
-          end
-    "#{list}"
+    list = @cards.map(&:to_s)
+    list
   end
 
   def size
@@ -195,30 +258,38 @@ class Deck
 
   private
 
-  def get_cards
-    SUITS.each do |suit|
-      CARD_TYPE.each do |type|
-        @cards << Card.new(type, suit)
+  def make_deck
+    Card::SUITS.each do |suit|
+      Card::FACES.each do |face|
+        @cards << Card.new(face, suit)
       end
     end
+    @cards.shuffle!
   end
-
 end
 
 class Card
+  SUITS = ['Hearts', 'Spades', 'Clubs', 'Diamonds']
+  FACES = ['Ace', 'Two', 'Three', 'Four', 'Five', 'Six',
+           'Seven', 'Eight', 'Nine', 'Ten', 'Jack', 'Queen', 'King']
+  VALUES = { 'Ace' => 11, 'Two' => 2, 'Three' => 3, 'Four' => 4,
+             'Five' => 5, 'Six' => 6, 'Seven' => 7, 'Eight' => 8,
+             'Nine' => 9, 'Ten' => 10, 'Jack' => 10, 'Queen' => 10,
+             'King' => 10 }
+
   attr_reader :name, :suit, :value
 
   def initialize(name, suit)
     @suit = suit
     @name = name
-    @value = get_value
+    @value = VALUES[name]
   end
 
   def +(other)
     if other.is_a?(Integer)
-      self.value + other
+      value + other
     else
-      self.value + other.value
+      value + other.value
     end
   end
 
@@ -229,28 +300,14 @@ class Card
   def ==(other_card)
     name == other_card.name && suit == other_card.suit
   end
-
-  private
-
-  def get_value
-    case name
-      when 'Ace' then 11
-      when 'Two' then 2
-      when 'Three' then 3
-      when 'Four' then 4
-      when 'Five' then 5
-      when 'Six' then 6
-      when 'Seven' then 7
-      when 'Eight' then 8
-      when 'Nine' then 9
-      else 10
-    end
-  end
 end
 
 class Game
+  include Displayable
+
   attr_accessor :player, :dealer, :deck, :winner
-  def initialize 
+
+  def initialize
     @player = Player.new
     @dealer = Dealer.new
     @deck = Deck.new
@@ -259,23 +316,33 @@ class Game
 
   def start
     system("clear")
+    display_welcome_message
     deal_initial_cards
     show_initial_cards
+    game_body
+    show_result
+  end
+
+  private
+
+  def game_body
     loop do
-      # refactor this because the repetition is annoying me
       player_turn
       break @winner = @dealer if @player.bust?
       dealer_turn
       break @winner = @player if @dealer.bust?
       break if @player.stayed && @dealer.stayed
     end
-    show_result
   end
 
-  private
+  def display_welcome_message
+    display(["Welcome to Twenty-One!",
+             "Press ENTER to deal initial cards."])
+    gets.chomp
+  end
 
   def deal_initial_cards
-    2.times do  
+    2.times do
       @deck.deal(player)
       @deck.deal(dealer)
     end
@@ -311,14 +378,16 @@ class Game
   end # end dealer_turn
 
   def show_result
-    unless winner 
+    unless winner
       @winner = dealer.total > player.total ? dealer : player
     end
-    puts "#{@winner} wins with a total of #{@winner.total}!"
-    # show both cards?
+    system("clear")
+    display("GAME OVER")
+    player.display_hand
+    dealer.display_hand(false)
+    display("#{@winner} wins with a total of #{@winner.total}!")
   end # end show_result
 end # end Game Class
 
-# 
 game = Game.new
 game.start

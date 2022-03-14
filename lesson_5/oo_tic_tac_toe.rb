@@ -21,8 +21,8 @@ TicTactoe:
    x | o |   |   |    # active line
   ---+---+---+---+--- # divider line
      |   |   |   |    # active line
-  ---+---+---+---+--- # divider line
-     |   |   |   |    # active line
+  ---+---+---+----+---- # divider line
+     |   |   | 33 | 34    # active line
 
   There is always (n) number of active lines, joined by (n-1) number of 
   divider lines. Can I .join something using the return value of a method?
@@ -62,21 +62,21 @@ IMPROVEMENTS:
   [/] Change 'is_full?' to 'full?'
   [/] Change 'find_available' to 'find_unmarked'
   [/] Add Clear Screen to Board#display method
-  [ ] Fix Reference Board for double digit numbers
-  [ ] Change Reference Board method names to be more explicit if needed
-  [ ] change Reference = true to reference: true, and call it, reference:true
+  [/] Fix Reference Board for double digit numbers
+  [/] Change Reference Board method names to be more explicit if needed
+  [/] change Reference = true to reference: true, and call it, reference:true
 
 - TTTGame Class:
-  [ ] Display Player Name and Marker
+  [/] Display Player Name and Marker
   [/] Refactor Play method
     [/] Specifically Loop -> Move System Clear to Display method
     [/] use current player logic instead of player 1, player 2 in loop 
   [/] Exit Game at 5 Points [/] Play to 5 points
-  [ ] In 2 Player Mode, Display Whose Turn it is
+  [/] In 2 Player Mode, Display Whose Turn it is
 
 - Banner Class:
   [ ] How to deal with long strings, aside from just throwing an error?
-  [ ] How to deal with diplaying the reference board?
+  [/] How to deal with displaying the reference board?
 
 - General refactoring
   [ ] make sure each method does only one thing,
@@ -203,8 +203,9 @@ class Board
     @grid_size
   end
 
-  def display(n=@grid_size)
+  def display(n=@grid_size, heading=nil)
     system('clear')
+    puts heading unless heading.nil?
     puts make_active_lines(n).join(make_divider_line(n))
   end
 
@@ -312,7 +313,7 @@ class Board
     n.times do
       active_line = []
       n.times do
-        r_marker = @squares[counter].mark ? @squares[counter].mark : (counter + 1)
+        r_marker = @squares[counter].mark ? " " : (counter + 1)
         marker = reference ? r_marker : @squares[counter]
         active_line << " #{marker} "
         counter += 1
@@ -341,6 +342,7 @@ class TTTGame
   BOARD_RANGE = (MIN_BOARD_SIZE..MAX_BOARD_SIZE).to_a
 
   attr_accessor :board, :player1, :player2, :current_player
+
   def initialize
     @board = nil # Board.new(3) # keeps track of board state
     @player1 = nil
@@ -355,9 +357,9 @@ class TTTGame
     set_game_parameters
     loop do # New Game Loop
       loop do # Turn-taking loop
-        board.display
+        board.display(@board.size, heading)
         @current_player.choose_square(board)
-        board.display
+        board.display(@board.size, heading)
         break if board.full? || winner_exists?
         @current_player = next_player
       end # End Turn
@@ -371,6 +373,14 @@ class TTTGame
   end
 
   private
+
+  def heading
+    Banner.new(["Round #{@round}",
+                "#{player1.name} (#{player1.marker}) VS " +
+                "#{player2.name} (#{player2.marker})",
+                "#{@current_player.name}'s turn."],
+                BANNER_SIZE)
+  end
 
   def increment_points
     @winner.points += 1 if @winner
